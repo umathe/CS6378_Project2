@@ -24,8 +24,7 @@ public class Parser {
 	public static void main(String[] args) {
 		Parser main = new Parser();
 
-		File config_file = new File(
-				"C:\\Users\\hinam\\Documents\\2018 Fall - CS 6378.001 - Advanced Operating System\\SampleInput.txt");
+		File config_file = new File("SampleInput.txt");
 		info_nodes = main.ReadInput(config_file); // Run method.
 
 		System.out.println(Arrays.deepToString(info_nodes)); // Print for testing. DELETE
