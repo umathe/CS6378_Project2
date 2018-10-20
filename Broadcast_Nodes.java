@@ -27,20 +27,11 @@ public class Broadcast_Nodes {
 	static String[] nodeNeighborsArray;
 	static int nodeNumber = 0;
 
-	static Socket server = null;
 	static ArrayList<Socket> socClientsArray = new ArrayList<Socket>();
 	static int[] neighborHopArray;
-
-	static int numTimesUpdated = 0;
-	
-	//check number of updates
-	static boolean serverUpdateFlag = true;
-	static int clientthread = 0;
-	static int updatesCounter = 0;
-	final int[] updatedClientCounter = new int[1];
 	
 	int num_nodes = 0;
-	int temp_num_nodes = 0;
+	int temp_num_nodes = 1;
 	static String[][] info_nodes;
 	static ArrayList<Socket> childArray = new ArrayList<Socket>();
 	static Socket parentNode = null;
@@ -52,7 +43,7 @@ public class Broadcast_Nodes {
 	public static void main(String[] args) {
 		Broadcast_Nodes n1 = new Broadcast_Nodes(); // Initialize class
 
-		File config_file = new File("C:\\Personal Stuff\\ProjectWorkspace\\ProjectAssignmnet2\\src\\broadcastSystem\\SampleInput.txt");
+		File config_file = new File("SampleInput.txt");
 		// Check if configuration file is available
 		if (config_file.exists() == true) {
 			System.out.println("Configuration file for input found.");
