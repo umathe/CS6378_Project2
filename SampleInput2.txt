@@ -1,0 +1,19 @@
+# 
+# Configuration file for CS/CE 6378 Project 2 
+# (Fall 2018) 
+# 
+# As per the "shell" convention, anything following a hash sign is 
+# a comment and should be ignored by the parser.
+
+# Number of nodes 
+4
+
+# 8 possible spanning trees 
+# Graph is square with diagonal edge
+
+# Format is: 
+# Hostname Port Neighbor List 
+dc01 3332 2 3 4  
+dc02 5678 1 4 
+dc03 5231 1 4  
+dc04 2311 1 2 3 
