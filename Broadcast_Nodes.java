@@ -43,7 +43,7 @@ public class Broadcast_Nodes {
 	public static void main(String[] args) {
 		Broadcast_Nodes n1 = new Broadcast_Nodes(); // Initialize class
 
-		File config_file = new File("SampleInput.txt");
+		File config_file = new File("C:\\Personal Stuff\\ProjectWorkspace\\ProjectAssignmnet2\\src\\broadcastSystem\\SampleInput.txt");
 		// Check if configuration file is available
 		if (config_file.exists() == true) {
 			System.out.println("Configuration file for input found.");
@@ -176,10 +176,8 @@ public class Broadcast_Nodes {
 				}
 			}
 		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		return info_nodes;
@@ -195,20 +193,35 @@ public class Broadcast_Nodes {
 		int counter = 0;
 		while(true) {
 			try {				
-				Socket soc = ssoc.accept();			
+				Socket soc = ssoc.accept();	
+				//System.out.println("in setServer");				
 				socClientsArray.add(soc);
 				counter++;
 				if(counter == nodeNeighborsNumber){
 					ArrayList<Socket> tempList = new ArrayList<>(socClientsArray);
+					final CountDownLatch latch = new CountDownLatch(tempList.size());
 					for(int i = 0; i<tempList.size(); i++) {
 						final Socket iVal = tempList.get(i);
-						//final CountDownLatch latch = new CountDownLatch(tempList.size());
 						Thread commThread = new Thread(new Runnable() {
 							public void run() {
+								//System.out.println("in threadServer");
 								createSpanningTreeParent(iVal);
+								latch.countDown();
 							}
 						});				
 						commThread.start();
+						//System.out.println("i " + i + "templist size " + tempList.size());
+						if(i == tempList.size()-1){
+							try {
+								//System.out.println("in server broadcast");
+								latch.await();
+								Thread.sleep(5000);
+								sendReceiveBroadCastMessage("Hello 5");
+								serverRecieveMessages(childArray);
+							} catch (InterruptedException e) {
+								e.printStackTrace();
+							}
+						}
 					}
 				}
 			} catch (SocketException e1) {
@@ -222,18 +235,63 @@ public class Broadcast_Nodes {
 				e.printStackTrace();
 			}
 		}
-	}	
-
+	}		
+	
+	public void serverRecieveMessages(ArrayList<Socket> tempList){
+		for(Socket clientSoc : tempList) {
+			final Socket iVal = clientSoc;
+			Thread commThread = new Thread(new Runnable() {
+				public void run() {
+					try { 
+						//System.out.println("in server Receive msgs");
+			
+						DataOutputStream dos = null;
+						DataInputStream dis = null;
+						while(true){
+							System.out.println("Enter while");
+							dis = new DataInputStream(iVal.getInputStream());
+							String clientReply = dis.readUTF();
+							System.out.println("Message Recieved from "+ iVal + " is " + clientReply);
+							if(childArray.size() != 0) {	
+								for(Socket socket:childArray) {
+									if(socket != iVal) {											
+										System.out.println("Sending it forward to my neighbor "+ socket);
+										dos = new DataOutputStream(socket.getOutputStream());
+										dos.writeUTF(clientReply);
+									}
+								}
+								if(iVal != parentNode) {
+									System.out.println("Sending it forward to my parent "+ parentNode);
+									dos = new DataOutputStream(parentNode.getOutputStream());
+									dos.writeUTF(clientReply);
+								}
+							}
+						}
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			});				
+			commThread.start();
+		}
+	}
+	
 	public synchronized void createSpanningTreeParent(Socket iSoc) {
 		try {
 			Socket newSoc = iSoc;
-			DataOutputStream dos = new DataOutputStream(iSoc.getOutputStream());
+			DataOutputStream dos = null;
+			DataInputStream dis = null;
+			dos = new DataOutputStream(newSoc.getOutputStream());
+			//System.out.println("in cspt");
 			dos.writeUTF("Can I be your parent");
-			DataInputStream dis = new DataInputStream(iSoc.getInputStream());
-			boolean answer = (dis.readUTF()).equals("YES") ? true : false;
-			if(answer) {
-				System.out.println("CHILD "+ newSoc);
-				childArray.add(iSoc);
+			dis = new DataInputStream(newSoc.getInputStream());
+			String clientReply = dis.readUTF();
+			if(clientReply.equals("YES") || clientReply.equals("NO")){
+				boolean answer = (clientReply).equals("YES") ? true : false;
+				if(answer) {
+					System.out.println("CHILD "+ newSoc);
+					childArray.add(iSoc);
+				}
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -248,20 +306,43 @@ public class Broadcast_Nodes {
 			public void run(){
 				try {
 					Socket clientSocket = new Socket(nodeHostName, nodePortNumber);
-					DataInputStream dis = new DataInputStream(clientSocket.getInputStream());
-					String question = dis.readUTF();
-					DataOutputStream dos = null;
-					if(question.equals("Can I be your parent")) {
-						dos = new DataOutputStream(clientSocket.getOutputStream());
-						if(parentVariable == false&& nodeNumber != 1) {
-							parentVar[0] = clientSocket;
-							dos.writeUTF("YES");
+					DataInputStream in = null;
+					DataOutputStream out  = null;
+					while(true) {
+						//System.out.println("in client");
+						in = new DataInputStream(clientSocket.getInputStream());
+						String messageReceived = in.readUTF();
+						if(messageReceived.equals("Can I be your parent")) {
+							//System.out.println("in parent question");
+							out = new DataOutputStream(clientSocket.getOutputStream());
+							if(parentVariable == false&& nodeNumber != 1) {
+								parentVar[0] = clientSocket;
+								out.writeUTF("YES");
+							}
+							else {
+								out.writeUTF("NO");
+							}
 						}
 						else {
-							dos.writeUTF("NO");
+							//System.out.println("in broadcast client");
+							System.out.println("Message Recieved from "+ clientSocket + " is " + messageReceived);
+							if(childArray.size() != 0) {	
+								for(Socket socket:childArray) {
+									if(socket != clientSocket) {
+										System.out.println("Sending it forward to my neighbor "+ socket);
+										out = new DataOutputStream(socket.getOutputStream());
+										out.writeUTF(messageReceived);
+									}
+								}
+								if(clientSocket != parentNode) {
+									System.out.println("Sending it forward to my parent "+ parentNode);
+									out = new DataOutputStream(parentNode.getOutputStream());
+									out.writeUTF(messageReceived);
+								}
+							}
 						}
+						latch.countDown();
 					}
-					latch.countDown();
 				} catch (SocketException e) {
 					System.out.println(e);
 				} catch (IOException e) {
@@ -279,5 +360,30 @@ public class Broadcast_Nodes {
 			parentNode = parentVar[0];
 			System.out.println("parentNode : " +parentNode);
 		}
+	}
+	
+	public void sendReceiveBroadCastMessage(String message) {
+		for(Socket s:childArray) {
+			try {
+				DataOutputStream dos = new DataOutputStream(s.getOutputStream());
+				dos.writeUTF("HELLO 5");
+				System.out.println("msg sent to " + s);
+				/* DataInputStream dis = new DataInputStream(s.getInputStream());
+				String reply = dis.readUTF();
+				System.out.println("message received " + reply);
+				System.out.println("Message sent to and acknowledgement "+ reply +" recieved from " + s); */
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		try {
+			//System.out.println("parentNode: " + parentNode);
+			DataOutputStream dos = new DataOutputStream(parentNode.getOutputStream());
+			dos.writeUTF("HELLO 5");
+			System.out.println("msg sent to " + parentNode);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		System.out.println("msg sent ");
 	}
 }
