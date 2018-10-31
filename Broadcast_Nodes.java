@@ -45,7 +45,7 @@ public class Broadcast_Nodes {
 	public static void main(String[] args) {
 		Broadcast_Nodes n1 = new Broadcast_Nodes(); // Initialize class
 
-		File config_file = new File("C:\\Personal Stuff\\ProjectWorkspace\\ProjectAssignmnet2\\src\\broadcastSystem\\SampleInput.txt");
+		File config_file = new File("SampleInput.txt");
 		// Check if configuration file is available
 		if (config_file.exists() == true) {
 			System.out.println("Configuration file for input found.");
