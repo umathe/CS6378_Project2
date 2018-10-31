@@ -35,6 +35,8 @@ public class Broadcast_Nodes {
 	static String[][] info_nodes;
 	static ArrayList<Socket> childArray = new ArrayList<Socket>();
 	static Socket parentNode = null;
+	static ArrayList<Object[]> msgInfo = new ArrayList<Object[]>();
+	static int finalCounter = 0;
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// MAIN
@@ -57,7 +59,7 @@ public class Broadcast_Nodes {
 		
 		String[][] info_nodes = n1.ReadInput(config_file);
 
-		System.out.println(Arrays.deepToString(info_nodes)); // Print for testing. DELETE
+		//System.out.println(Arrays.deepToString(info_nodes)); // Print for testing. DELETE
 
 		try {
 			// Capture host name of dc machines (node)
@@ -216,7 +218,7 @@ public class Broadcast_Nodes {
 								//System.out.println("in server broadcast");
 								latch.await();
 								Thread.sleep(5000);
-								sendReceiveBroadCastMessage("Hello " + nodeNumber);
+								sendBroadCastMessage("Hello");
 								serverRecieveMessages(childArray);
 							} catch (InterruptedException e) {
 								e.printStackTrace();
@@ -240,32 +242,91 @@ public class Broadcast_Nodes {
 	public void serverRecieveMessages(ArrayList<Socket> tempList){
 		for(Socket clientSoc : tempList) {
 			final Socket iVal = clientSoc;
+			final Object[] senderInfo = new Object[5];
+			final int finalCounter1[] = {finalCounter};
+			final CountDownLatch latch = new CountDownLatch(1);
 			Thread commThread1 = new Thread(new Runnable() {
 				public void run() {
 					try { 
-						//System.out.println("in server Receive msgs");
-			
 						DataOutputStream dos = null;
 						DataInputStream dis = null;
 						while(true){
-							System.out.println("Enter while");
+							//System.out.println("Enter while");
+							
 							dis = new DataInputStream(iVal.getInputStream());
 							String clientReply = dis.readUTF();
-							System.out.println("Message Recieved from "+ iVal + " is " + clientReply);
-							if(childArray.size() != 0) {	
-								for(Socket socket:childArray) {
-									if(socket != iVal) {											
-										System.out.println("Sending it forward to my neighbor "+ socket);
-										dos = new DataOutputStream(socket.getOutputStream());
+							String[] messageArray = clientReply.split(" ");
+							
+							
+							if(messageArray[0].equals("Message")) {
+								System.out.println("Message Recieved from "+ iVal + " is " + messageArray[1] + " " + messageArray[3]);
+								senderInfo[0] = messageArray[2];
+								senderInfo[1] = messageArray[3];
+								senderInfo[2] = messageArray[4];
+								senderInfo[3] = iVal;
+								senderInfo[4] = childArray.size();
+								//System.out.println(Arrays.toString(senderInfo));
+													
+								if(childArray.size() != 0) {	
+									clientReply = messageArray[0] + " " + messageArray[1] + " " + messageArray[2] + " " + messageArray[3] + " " + nodeNumber;
+									for(Socket socket:childArray) {
+										if(socket != iVal) {
+											System.out.println("Sending "+clientReply+" forward to my neighbor "+ socket);
+											dos = new DataOutputStream(socket.getOutputStream());
+											dos.writeUTF(clientReply);
+											//dos.flush();
+											//senderInfo[4] = ((Integer)senderInfo[4])+1;
+										}
+									}
+									if(iVal != parentNode && nodeNumber != 1) {
+										System.out.println("Sending "+clientReply+" forward to my parent "+ parentNode);
+										dos = new DataOutputStream(parentNode.getOutputStream());
 										dos.writeUTF(clientReply);
+										//dos.flush();
+										senderInfo[4] = ((Integer)senderInfo[4])+1;
 									}
 								}
-								if(iVal != parentNode && nodeNumber != 1) {
-									System.out.println("Sending it forward to my parent "+ parentNode);
+								else {
+									clientReply = "Acknowledgement Received " + messageArray[2] + " " + messageArray[3];
+									System.out.println("Sending my ack for " + messageArray[3] + " back to "+ parentNode);
 									dos = new DataOutputStream(parentNode.getOutputStream());
 									dos.writeUTF(clientReply);
+									//dos.flush();
 								}
 							}
+							else if(messageArray[0].equals("Acknowledgement")){
+								System.out.println("I received ack "+clientReply);
+								if(messageArray[3].equals(Integer.toString(nodeNumber))){
+									finalCounter1[0] = finalCounter1[0]+1;
+									System.out.println("Ack received "+ finalCounter1[0]);
+									if(finalCounter1[0] >= 4){
+										System.out.println("Final Ack received "+ finalCounter1[0]);
+									}
+								}else {
+									for(Object[] a:msgInfo) {
+										if(a[0] != null & a[1] != null){
+											if(((String)a[0]).equals(messageArray[2]) && ((String)a[1]).equals((messageArray[3]))){
+												clientReply = "Acknowledgement Received " + messageArray[2] + " " + messageArray[3];
+												System.out.println("Sending back ack for " + messageArray[3] + " to " +a[3]);
+												dos = new DataOutputStream(((Socket) a[3]).getOutputStream());
+												dos.writeUTF(clientReply);
+												//dos.flush();
+												a[4] = ((Integer)a[4])-1;
+												//System.out.println(((Integer)a[4]));
+												if(((Integer)a[4]) <= 0){
+													clientReply = "Acknowledgement Received " + messageArray[2] + " " + messageArray[3];
+													System.out.println("Sending my ack for " + messageArray[3] + " to " +a[3]);
+													//dos = new DataOutputStream(((Socket) a[3]).getOutputStream());
+													dos.writeUTF(clientReply);
+													//dos.flush();
+												}
+												break;
+											}
+										}
+									}
+								}
+							}
+							latch.countDown();
 						}
 					} catch (IOException e) {
 						e.printStackTrace();
@@ -273,6 +334,13 @@ public class Broadcast_Nodes {
 				}
 			});				
 			commThread1.start();
+			try {
+				latch.await();
+				updateFinalCounter(finalCounter1[0]);
+				msgInfo.add(senderInfo);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 	
@@ -282,8 +350,7 @@ public class Broadcast_Nodes {
 			DataOutputStream dos = null;
 			DataInputStream dis = null;
 			dos = new DataOutputStream(newSoc.getOutputStream());
-			//System.out.println("in cspt");
-			dos.writeUTF("Can I be your parent");
+			dos.writeUTF("Question Canibeyourparent");
 			dis = new DataInputStream(newSoc.getInputStream());
 			String clientReply = dis.readUTF();
 			if(clientReply.equals("YES") || clientReply.equals("NO")){
@@ -301,6 +368,8 @@ public class Broadcast_Nodes {
 	public void setClient(String nodeHostName, int nodePortNumber) {
 		final boolean parentVariable = (parentNode==null)? false : true;
 		final Socket[] parentVar = new Socket[1]; 
+		final Object[] senderInfo = new Object[5]; 
+		final int finalCounter1[] = {finalCounter};
 		final CountDownLatch latch = new CountDownLatch(1);
 		Thread singleClientThread = new Thread(new Runnable(){
 			public void run(){
@@ -309,9 +378,11 @@ public class Broadcast_Nodes {
 					DataInputStream in = null;
 					DataOutputStream out  = null;
 					while(true) {
+	
 						in = new DataInputStream(clientSocket.getInputStream());
 						String messageReceived = in.readUTF();
-						if(messageReceived.equals("Can I be your parent")) {
+						String[] messageArray = messageReceived.split(" ");
+						if(messageArray[0].equals("Question")) {
 							out = new DataOutputStream(clientSocket.getOutputStream());
 							if(parentVariable == false&& nodeNumber != 1) {
 								parentVar[0] = clientSocket;
@@ -321,20 +392,72 @@ public class Broadcast_Nodes {
 								out.writeUTF("NO");
 							}
 						}
-						else {
-							System.out.println("Message Recieved from "+ clientSocket + " is " + messageReceived);
+						else if(messageArray[0].equals("Message")) {
+							System.out.println("Message Recieved from "+ clientSocket + " is " + messageArray[1] + " " + messageArray[3]);
+							senderInfo[0] = messageArray[2];
+							senderInfo[1] = messageArray[3];
+							senderInfo[2] = messageArray[4];
+							senderInfo[3] = clientSocket;
+							senderInfo[4] = childArray.size();
+							//System.out.println(Arrays.toString(senderInfo));
+							
 							if(childArray.size() != 0) {	
+								messageReceived = messageArray[0] + " " + messageArray[1] + " " + messageArray[2] + " " + messageArray[3] + " " + nodeNumber;
 								for(Socket socket:childArray) {
 									if(socket != clientSocket) {
-										System.out.println("Sending it forward to my neighbor "+ socket);
+										System.out.println("Sending "+messageReceived+" forward to my neighbor "+ socket);
 										out = new DataOutputStream(socket.getOutputStream());
 										out.writeUTF(messageReceived);
+										//out.flush();
+										//senderInfo[4] = ((Integer)senderInfo[4])+1;
 									}
 								}
 								if(clientSocket != parentNode && nodeNumber != 1) {
-									System.out.println("Sending it forward to my parent "+ parentNode);
+									System.out.println("Sending "+messageReceived+" it forward to my parent "+ parentNode);
 									out = new DataOutputStream(parentNode.getOutputStream());
 									out.writeUTF(messageReceived);
+									//out.flush();
+									senderInfo[4] = ((Integer)senderInfo[4])+1;
+								}
+							}
+							else {
+								messageReceived = "Acknowledgement Received " + messageArray[2] + " " + messageArray[3];
+								System.out.println("Sending my ack for " + messageArray[3] + " back to "+ parentNode);
+								out = new DataOutputStream(parentNode.getOutputStream());
+								out.writeUTF(messageReceived);
+								//out.flush();
+							}
+						}
+						else if(messageArray[0].equals("Acknowledgement")){
+							System.out.println("I received ack "+messageReceived);
+							if(messageArray[3].equals(Integer.toString(nodeNumber))){
+								finalCounter1[0] = finalCounter1[0]+1;
+								System.out.println("Ack received "+ finalCounter1[0]);
+								if(finalCounter1[0] >= 4){
+									System.out.println("Final Ack received "+ finalCounter1[0]);
+								}
+							}
+							else {
+								for(Object[] a:msgInfo) {
+									if(a[0] != null & a[1] != null){
+										if(((String)a[0]).equals(messageArray[2]) && ((String)a[1]).equals((messageArray[3]))){
+											messageReceived = "Acknowledgement Received " + messageArray[2] + " " + messageArray[3];
+											System.out.println("Sending back ack for " + messageArray[3]+ " to " +a[3]);
+											out = new DataOutputStream(((Socket) a[3]).getOutputStream());
+											out.writeUTF(messageReceived);
+											//out.flush();
+											a[4] = ((Integer)a[4])-1;
+											//System.out.println(((Integer)a[4]));
+											if(((Integer)a[4]) <= 0){
+												messageReceived = "Acknowledgement Received " + messageArray[2] + " " + messageArray[3];
+												System.out.println("Sending my ack for " + messageArray[3] + " to " +a[3]);
+												//out = new DataOutputStream(((Socket) a[3]).getOutputStream());
+												out.writeUTF(messageReceived);
+											//	out.flush();
+											}
+											break;
+										}
+									}
 								}
 							}
 						}
@@ -350,38 +473,47 @@ public class Broadcast_Nodes {
 		singleClientThread.start();
 		try {
 			latch.await();
+			if(parentVar[0] != null && nodeNumber != 1){
+				parentNode = parentVar[0];
+				System.out.println("parentNode : " +parentNode);
+			}
+			updateFinalCounter(finalCounter1[0]);
+			msgInfo.add(senderInfo);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		if(parentVar[0] != null && nodeNumber != 1){
-			parentNode = parentVar[0];
-			System.out.println("parentNode : " +parentNode);
-		}
 	}
 	
-	public void sendReceiveBroadCastMessage(String message) {
+	public void sendBroadCastMessage(String message) {
+		String msgBroadcast = "Message "+message+" 1 "+ nodeNumber + " " + nodeNumber; 
 		for(Socket s:childArray) {
 			try {
 				DataOutputStream dos = new DataOutputStream(s.getOutputStream());
-				dos.writeUTF("Hello " + nodeNumber);
-				System.out.println("msg sent to " + s);
-				/* DataInputStream dis = new DataInputStream(s.getInputStream());
-				String reply = dis.readUTF();
-				System.out.println("message received " + reply);
-				System.out.println("Message sent to and acknowledgement "+ reply +" recieved from " + s); */
+				dos.writeUTF(msgBroadcast);
+				//dos.flush();
+				System.out.println("msg " + msgBroadcast + " sent to " + s);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
 		if(nodeNumber != 1){
 			try {
-				//System.out.println("parentNode: " + parentNode);
 				DataOutputStream dos = new DataOutputStream(parentNode.getOutputStream());
-				dos.writeUTF("Hello " + nodeNumber);
-				System.out.println("msg sent to " + parentNode);
+				dos.writeUTF(msgBroadcast);
+				//dos.flush();
+				System.out.println("msg " + msgBroadcast + " sent to " + parentNode);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
+		}
+	}
+	
+	public synchronized void updateFinalCounter(int fcVal){
+		if(fcVal <= finalCounter){
+			finalCounter = finalCounter+1;
+		}
+		else {
+			finalCounter = fcVal;
 		}
 	}
 }
